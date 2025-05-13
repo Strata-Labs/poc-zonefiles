@@ -1,0 +1,48 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String   @id @default(cuid())
+  stacksAddress    String   @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  domains          Domain[]
+}
+
+model Domain {
+  id               String   @id @default(cuid())
+  name             String   @unique
+  ownerStacksAddress String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  owner            User     @relation(fields: [ownerStacksAddress], references: [stacksAddress])
+  addresses        Address[]
+}
+
+model Address {
+  id               String   @id @default(cuid())
+  address          String
+  chain            Chain
+  domainId         String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  domain           Domain   @relation(fields: [domainId], references: [id])
+
+  @@unique([address, chain])
+  @@index([address, chain])
+}
+
+enum Chain {
+  BTC
+  ETH
+  SOL
+}
