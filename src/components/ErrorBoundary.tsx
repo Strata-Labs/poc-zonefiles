@@ -1,6 +1,7 @@
 // components/ErrorBoundary.tsx
 
 import React, { Component, ErrorInfo, ReactNode } from "react";
+import { AlertCircle, RefreshCw } from "lucide-react";
 
 interface Props {
   children: ReactNode;
@@ -39,19 +40,31 @@ class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="p-4 border border-red-300 bg-red-50 rounded-md">
-          <h2 className="text-lg font-semibold text-red-700 mb-2">
-            Something went wrong
-          </h2>
-          <p className="text-red-600">
-            {this.state.error?.message || "An unknown error occurred"}
-          </p>
-          <button
-            className="mt-3 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-            onClick={() => this.setState({ hasError: false, error: null })}
-          >
-            Try again
-          </button>
+        <div className="min-h-screen bg-black flex items-center justify-center p-4">
+          <div className="p-6 border border-red-800 bg-zinc-900 rounded-lg max-w-md w-full shadow-lg">
+            <div className="flex items-start space-x-4">
+              <div className="h-12 w-12 bg-red-900/50 rounded-full flex items-center justify-center flex-shrink-0">
+                <AlertCircle className="h-6 w-6 text-red-500" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-white mb-2">
+                  Something went wrong
+                </h2>
+                <p className="text-red-400 mb-4">
+                  {this.state.error?.message || "An unknown error occurred"}
+                </p>
+                <button
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center space-x-2"
+                  onClick={() =>
+                    this.setState({ hasError: false, error: null })
+                  }
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  <span>Try again</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       );
     }

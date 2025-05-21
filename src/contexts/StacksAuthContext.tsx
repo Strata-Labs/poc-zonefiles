@@ -1,8 +1,9 @@
 // contexts/StacksAuthContext.tsx
 
-import React, { createContext, useContext, useEffect } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { userSession, useStacksAuth } from "../../utils/auth";
 
+// Update the interface to include isAuthenticating
 interface StacksAuthContextType {
   authenticated: boolean;
   senderAddresses: {
@@ -11,6 +12,8 @@ interface StacksAuthContextType {
   };
   authenticate: () => void;
   logout: () => void;
+  isAuthenticating: boolean; // Added this property
+  authError: string | null; // Optional: Added for error handling
 }
 
 const StacksAuthContext = createContext<StacksAuthContextType | undefined>(

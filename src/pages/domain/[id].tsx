@@ -1,34 +1,34 @@
-// pages/domain/[id].tsx
-
 import { useRouter } from "next/router";
 import { useState } from "react";
 import { useStacksAuthContext } from "../../contexts/StacksAuthContext";
 import Link from "next/link";
 import { trpc } from "../../../utils/trpc";
-import { signMessage } from "../../../utils/auth";
-import Layout from "@/components/Layout/layout";
-import { tryCatch } from "../../../utils/try-catch-wrapper";
 import ErrorBoundary from "../../components/ErrorBoundary";
-
-// Type for the add address form
-type AddressFormData = {
-  address: string;
-  chain: "BTC" | "ETH" | "SOL";
-};
-
-// Form states
-type FormState = "input" | "signing" | "processing" | "success" | "error";
+import AddressForm from "@/components/AddressForm/AddressForm";
+import RemoveAddressModal from "@/components/RemoveAddress/RemoveAddressModal";
+import {
+  Globe,
+  Loader,
+  ArrowLeft,
+  Copy,
+  ExternalLink,
+  Clock,
+  Plus,
+  Trash2,
+  AlertCircle,
+  CheckCircle,
+  ChevronDown,
+  Info,
+  Shield,
+} from "lucide-react";
+import Layout from "@/components/Layout";
+import Head from "next/head";
 
 export default function DomainManagement() {
   const router = useRouter();
   const { id } = router.query;
   const { authenticated, senderAddresses } = useStacksAuthContext();
   const [error, setError] = useState("");
-  const [formData, setFormData] = useState<AddressFormData>({
-    address: "",
-    chain: "BTC",
-  });
-  const [formState, setFormState] = useState<FormState>("input");
   const [successMessage, setSuccessMessage] = useState("");
   const [isRemovingAddress, setIsRemovingAddress] = useState(false);
   const [addressToRemove, setAddressToRemove] = useState<{
@@ -36,6 +36,22 @@ export default function DomainManagement() {
     address: string;
     chain: "BTC" | "ETH" | "SOL";
   } | null>(null);
+  const [addAddressVisible, setAddAddressVisible] = useState(false);
+  const [addressesByChain, setAddressesByChain] = useState<{
+    [key: string]: boolean;
+  }>({
+    BTC: true,
+    ETH: true,
+    SOL: true,
+  });
+
+  // Function to toggle address visibility by chain
+  const toggleAddressVisibility = (chain: string) => {
+    setAddressesByChain((prev) => ({
+      ...prev,
+      [chain]: !prev[chain],
+    }));
+  };
 
   // Fetch domain data
   const {
@@ -51,166 +67,6 @@ export default function DomainManagement() {
     }
   );
 
-  // Add address mutation
-  const addAddressMutation = trpc.domain.addAddress.useMutation({
-    onSuccess: () => {
-      setFormData({ address: "", chain: "BTC" });
-      setFormState("success");
-      setSuccessMessage("Address added successfully!");
-      refetch();
-
-      // Reset to input state after a delay
-      setTimeout(() => {
-        setFormState("input");
-        setSuccessMessage("");
-      }, 3000);
-    },
-    onError: (error) => {
-      console.error("Mutation error:", error);
-
-      if (error.message.includes("already registered")) {
-        setError(
-          `This ${formData.chain} address is already registered in the system. Each address can only be registered once per blockchain.`
-        );
-      } else {
-        setError(error.message || "Failed to add address. Please try again.");
-      }
-
-      setFormState("error");
-
-      setTimeout(() => {
-        setFormState("input");
-      }, 5000);
-    },
-  });
-
-  // Remove address mutation
-  const removeAddressMutation = trpc.domain.removeAddress.useMutation({
-    onSuccess: () => {
-      setIsRemovingAddress(false);
-      setAddressToRemove(null);
-      setFormState("success");
-      setSuccessMessage("Address removed successfully!");
-      refetch();
-
-      // Reset success message after a delay
-      setTimeout(() => {
-        setFormState("input");
-        setSuccessMessage("");
-      }, 3000);
-    },
-    onError: (error) => {
-      console.error("Remove mutation error:", error);
-      setError(error.message || "Failed to remove address. Please try again.");
-      setFormState("error");
-      setIsRemovingAddress(false);
-      setAddressToRemove(null);
-
-      // Reset to input state after a delay on error
-      setTimeout(() => {
-        setFormState("input");
-      }, 5000);
-    },
-  });
-
-  // Handle form changes
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  // Handle form submission to add an address
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-
-    if (!authenticated || !domain) {
-      setError("You must be authenticated and own this domain");
-      return;
-    }
-
-    // Validate that the user is the owner
-    if (domain.ownerStacksAddress !== senderAddresses.mainnet) {
-      setError("You are not the owner of this domain");
-      return;
-    }
-
-    // Validate the address format
-    if (!formData.address.trim()) {
-      setError("Address is required");
-      return;
-    }
-
-    // Chain-specific validation
-    if (
-      formData.chain === "BTC" &&
-      !/^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,39}$/.test(formData.address)
-    ) {
-      setError("Please enter a valid Bitcoin address");
-      return;
-    } else if (
-      formData.chain === "ETH" &&
-      !/^0x[a-fA-F0-9]{40}$/.test(formData.address)
-    ) {
-      setError("Please enter a valid Ethereum address");
-      return;
-    } else if (
-      formData.chain === "SOL" &&
-      !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(formData.address)
-    ) {
-      setError("Please enter a valid Solana address");
-      return;
-    }
-
-    setFormState("signing");
-
-    const message = `I authorize adding ${formData.chain} address ${formData.address} to domain ${domain.name}`;
-
-    console.log("Attempting to sign message:", message);
-
-    const [signatureResponse, signError] = await tryCatch(async () => {
-      return await signMessage(message);
-    });
-
-    if (signError) {
-      console.error("Signature error:", signError);
-      setFormState("error");
-
-      if (signError.message === "USER_REJECTED_SIGNATURE") {
-        setError(
-          "You cancelled the signature request. To add an address, you need to authorize with your wallet."
-        );
-      } else {
-        setError(
-          signError.message || "Failed to sign message. Please try again."
-        );
-      }
-
-      setTimeout(() => {
-        setFormState("input");
-      }, 5000);
-
-      return;
-    }
-
-    setFormState("processing");
-
-    // Submit the form with signature
-    try {
-      await addAddressMutation.mutateAsync({
-        domainId: domain.id,
-        address: formData.address,
-        chain: formData.chain,
-        signature: signatureResponse!.signature,
-        publicKey: signatureResponse!.publicKey,
-      });
-    } catch (err) {
-      console.error("Mutation failed:", err);
-    }
-  };
-
   // Handle address removal
   const handleRemoveClick = (
     addressId: string,
@@ -222,73 +78,118 @@ export default function DomainManagement() {
     setError("");
   };
 
-  // Confirm address removal
-  const confirmRemoveAddress = async () => {
-    if (!addressToRemove || !domain || !authenticated) {
-      setError("Missing required information to remove address");
-      return;
-    }
+  // Handle successful address removal
+  const handleRemoveSuccess = () => {
+    setIsRemovingAddress(false);
+    setAddressToRemove(null);
+    setSuccessMessage("Address removed successfully!");
+    refetch();
 
-    // Verify owner
-    if (domain.ownerStacksAddress !== senderAddresses.mainnet) {
-      setError("You are not the owner of this domain");
-      return;
-    }
-
-    setFormState("signing");
-
-    // Generate message to sign
-    const message = `I authorize removing ${addressToRemove.chain} address ${addressToRemove.address} from domain ${domain.name}`;
-
-    console.log("Attempting to sign removal message:", message);
-
-    const [signatureResponse, signError] = await tryCatch(async () => {
-      return await signMessage(message);
-    });
-
-    if (signError) {
-      console.error("Signature error:", signError);
-      setFormState("error");
-
-      if (signError.message === "USER_REJECTED_SIGNATURE") {
-        setError(
-          "You cancelled the signature request. To remove an address, you need to authorize with your wallet."
-        );
-      } else {
-        setError(
-          signError.message || "Failed to sign message. Please try again."
-        );
-      }
-
-      setIsRemovingAddress(false);
-      setAddressToRemove(null);
-
-      setTimeout(() => {
-        setFormState("input");
-        setError("");
-      }, 5000);
-
-      return;
-    }
-
-    setFormState("processing");
-
-    // Submit the removal with signature
-    try {
-      await removeAddressMutation.mutateAsync({
-        addressId: addressToRemove.id,
-        signature: signatureResponse!.signature,
-        publicKey: signatureResponse!.publicKey,
-      });
-    } catch (err) {
-      console.error("Remove mutation failed:", err);
-    }
+    // Reset success message after a delay
+    setTimeout(() => {
+      setSuccessMessage("");
+    }, 3000);
   };
 
   // Cancel address removal
-  const cancelRemoveAddress = () => {
+  const handleRemoveCancel = () => {
     setIsRemovingAddress(false);
     setAddressToRemove(null);
+  };
+
+  // Copy address to clipboard
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setSuccessMessage("Address copied to clipboard!");
+    setTimeout(() => setSuccessMessage(""), 2000);
+  };
+
+  // Toggle address form visibility
+  const toggleAddAddressForm = () => {
+    setAddAddressVisible(!addAddressVisible);
+  };
+
+  // Group addresses by chain
+  const addressesByChainMap =
+    domain?.addresses?.reduce(
+      (acc: { [key: string]: typeof domain.addresses }, address) => {
+        if (!acc[address.chain]) {
+          acc[address.chain] = [];
+        }
+        acc[address.chain].push(address);
+        return acc;
+      },
+      {} as { [key: string]: typeof domain.addresses }
+    ) || {};
+
+  // Get chain-specific class and icon
+  const getChainStyles = (chain: string) => {
+    switch (chain) {
+      case "BTC":
+        return {
+          bgColor: "bg-orange-900/20",
+          textColor: "text-orange-400",
+          borderColor: "border-orange-900/30",
+          icon: (
+            <svg
+              className="h-4 w-4 mr-2"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M23.638 14.904c-1.602 6.43-8.113 10.34-14.542 8.736C2.67 22.05-1.244 15.525.362 9.105 1.962 2.67 8.475-1.243 14.9.358c6.43 1.605 10.342 8.115 8.738 14.548v-.002zm-6.35-4.613c.24-1.59-.974-2.45-2.64-3.03l.54-2.153-1.315-.33-.525 2.107c-.345-.087-.705-.17-1.06-.25l.53-2.127-1.32-.33-.54 2.165c-.285-.065-.565-.13-.84-.2l-1.815-.45-.35 1.407s.975.225.955.238c.535.136.63.495.615.78l-1.477 5.92c-.075.18-.24.45-.625.35.015.02-.96-.24-.96-.24l-.655 1.51 1.715.43.93.236-.54 2.19 1.32.33.54-2.17c.36.1.705.19 1.05.273l-.54 2.143 1.32.33.54-2.18c2.24.427 3.93.255 4.64-1.775.57-1.637-.03-2.582-1.217-3.2.854-.193 1.5-.76 1.68-1.93h.01zm-3.01 4.22c-.404 1.64-3.157.75-4.05.53l.72-2.9c.896.23 3.757.67 3.33 2.37zm.41-4.24c-.37 1.49-2.662.735-3.405.55l.654-2.64c.744.185 3.137.53 2.75 2.084v.006z"
+                fill="#F97316"
+              />
+            </svg>
+          ),
+        };
+      case "ETH":
+        return {
+          bgColor: "bg-blue-900/20",
+          textColor: "text-blue-400",
+          borderColor: "border-blue-900/30",
+          icon: (
+            <svg
+              className="h-4 w-4 mr-2"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M11.944 17.97L4.58 13.62 11.943 24l7.37-10.38-7.372 4.35h.003zM12.056 0L4.69 12.223l7.365 4.354 7.365-4.35L12.056 0z"
+                fill="#60A5FA"
+              />
+            </svg>
+          ),
+        };
+      case "SOL":
+        return {
+          bgColor: "bg-purple-900/20",
+          textColor: "text-purple-400",
+          borderColor: "border-purple-900/30",
+          icon: (
+            <svg
+              className="h-4 w-4 mr-2"
+              viewBox="0 0 397 311"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M64.6 237.9c2.4-2.4 5.7-3.8 9.2-3.8h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1l62.7-62.7zm0-164.7c2.4-2.4 5.7-3.8 9.2-3.8h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1l62.7-62.7zm317.2-47.3c-5.8 0-8.7-7-4.6-11.1l62.7-62.7c2.4-2.4 5.7-3.8 9.2-3.8h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H73.8z"
+                fill="#C084FC"
+              />
+            </svg>
+          ),
+        };
+      default:
+        return {
+          bgColor: "bg-zinc-800",
+          textColor: "text-gray-400",
+          borderColor: "border-zinc-700",
+          icon: <Globe className="h-4 w-4 mr-2 text-gray-400" />,
+        };
+    }
   };
 
   if (!id) {
@@ -298,27 +199,9 @@ export default function DomainManagement() {
   if (isLoading) {
     return (
       <Layout title="Loading..." description="Loading domain information">
-        <div className="flex justify-center py-10">
-          <svg
-            className="animate-spin h-10 w-10 text-blue-500"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            ></circle>
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            ></path>
-          </svg>
+        <div className="flex flex-col items-center justify-center py-12">
+          <Loader className="h-10 w-10 text-emerald-500 animate-spin mb-4" />
+          <p className="text-gray-400">Loading domain information...</p>
         </div>
       </Layout>
     );
@@ -330,14 +213,25 @@ export default function DomainManagement() {
         title="Domain Not Found"
         description="The requested domain does not exist"
       >
-        <div className="p-6 bg-red-50 border border-red-200 rounded-lg text-center">
-          <p className="text-red-600 mb-4">Domain not found</p>
-          <Link
-            href="/"
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Return to Home
-          </Link>
+        <div className="py-8 text-center">
+          <div className="bg-red-900/20 border border-red-900/30 rounded-lg p-6 inline-block mx-auto">
+            <div className="h-16 w-16 mx-auto bg-red-900/40 rounded-full flex items-center justify-center mb-4">
+              <AlertCircle className="h-8 w-8 text-red-500" />
+            </div>
+            <h2 className="text-lg font-medium text-white mb-2">
+              Domain Not Found
+            </h2>
+            <p className="text-red-400 mb-6">
+              The domain "{id}" could not be found in our system.
+            </p>
+            <Link
+              href="/"
+              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 inline-flex items-center shadow-lg shadow-emerald-900/30"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Return to Dashboard
+            </Link>
+          </div>
         </div>
       </Layout>
     );
@@ -348,334 +242,272 @@ export default function DomainManagement() {
 
   return (
     <ErrorBoundary>
+      <Head>
+        <title>{domain.name} | Domain Hub</title>
+        <meta
+          name="description"
+          content={`Manage your domain ${domain.name} and its linked blockchain addresses`}
+        />
+      </Head>
       <Layout title={domain.name} description={`Manage domain ${domain.name}`}>
-        {/* Success/Error messages */}
-        {formState === "success" && successMessage && (
-          <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded">
-            <p className="flex items-center text-green-700">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5 mr-3 text-green-500"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              {successMessage}
-            </p>
+        {/* Success Message */}
+        {successMessage && (
+          <div className="mb-6 p-4 bg-emerald-900/20 border border-emerald-900/30 rounded-lg flex items-start shadow-sm animate-fadeIn">
+            <CheckCircle className="h-5 w-5 text-emerald-400 mr-3 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-emerald-300">{successMessage}</p>
+            </div>
           </div>
         )}
 
-        {formState === "error" && error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded">
-            <p className="flex items-start text-red-700">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5 mr-3 mt-0.5 flex-shrink-0 text-red-500"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              <span>{error}</span>
-            </p>
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-900/20 border border-red-900/30 rounded-lg flex items-start shadow-sm">
+            <AlertCircle className="h-5 w-5 text-red-400 mr-3 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-red-300">{error}</p>
+            </div>
           </div>
         )}
 
-        <section className="mb-8">
-          <h2 className="text-xl font-semibold mb-4">Addresses</h2>
-          <div className="p-6 border rounded-lg">
-            {domain.addresses && domain.addresses.length > 0 ? (
-              <div className="space-y-4">
-                {domain.addresses.map((address) => (
-                  <div
-                    key={address.id}
-                    className="flex justify-between items-center p-3 bg-gray-50 rounded"
-                  >
-                    <div>
-                      <span className="text-sm font-semibold text-gray-500">
-                        {address.chain}
-                      </span>
-                      <div className="font-mono">{address.address}</div>
-                    </div>
-                    {isOwner && (
-                      <button
-                        className="text-red-500 hover:underline"
-                        onClick={() =>
-                          handleRemoveClick(
-                            address.id,
-                            address.address,
-                            address.chain as "BTC" | "ETH" | "SOL"
-                          )
-                        }
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                ))}
+        {/* Domain Header */}
+        <div className="bg-gradient-to-r from-emerald-900/30 to-zinc-900 p-6 rounded-lg mb-8 border border-emerald-900/20">
+          <div className="flex flex-col md:flex-row md:items-center justify-between">
+            <div className="mb-4 md:mb-0">
+              <div className="flex items-center">
+                <Globe className="h-6 w-6 text-emerald-400 mr-2" />
+                <h2 className="text-2xl font-bold text-white">{domain.name}</h2>
               </div>
-            ) : (
-              <p className="text-center text-gray-500">
-                No addresses linked to this domain yet.
-              </p>
+              <div className="mt-2 text-sm text-gray-400 flex items-center">
+                <Clock className="h-4 w-4 mr-1 text-gray-500" />
+                <span>
+                  Registered on{" "}
+                  {new Date(domain.createdAt).toLocaleDateString()}
+                </span>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              {isOwner && (
+                <Link
+                  href="/register"
+                  className="inline-flex items-center justify-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 hover:shadow-lg shadow-emerald-900/30"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Register Another Domain
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Domain Details */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-white flex items-center">
+              <div className="flex items-center">
+                <Globe className="h-5 w-5 mr-2 text-emerald-500" />
+                <span>Blockchain Addresses</span>
+              </div>
+            </h3>
+            {isOwner && (
+              <button
+                onClick={toggleAddAddressForm}
+                className="inline-flex items-center justify-center px-3 py-1.5 text-sm border border-emerald-700 shadow-sm font-medium rounded-md text-emerald-400 bg-emerald-900/20 hover:bg-emerald-900/40"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add Address
+              </button>
             )}
           </div>
-        </section>
 
-        {/* Address Removal Confirmation Modal */}
-        {isRemovingAddress && addressToRemove && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full">
-              <h3 className="text-lg font-semibold mb-3">
-                Confirm Address Removal
-              </h3>
-              <p className="mb-4">
-                Are you sure you want to remove this {addressToRemove.chain}{" "}
-                address from your domain?
-              </p>
-              <div className="p-3 bg-gray-50 rounded mb-4">
-                <span className="text-sm font-medium text-gray-500">
-                  {addressToRemove.chain}
-                </span>
-                <div className="font-mono text-sm truncate">
-                  {addressToRemove.address}
+          {/* Address Cards Section */}
+          <div className="space-y-4">
+            {Object.keys(addressesByChainMap).length > 0 ? (
+              Object.entries(addressesByChainMap).map(([chain, addresses]) => {
+                const { bgColor, textColor, borderColor, icon } =
+                  getChainStyles(chain);
+
+                return (
+                  <div
+                    key={chain}
+                    className={`border ${borderColor} rounded-lg overflow-hidden bg-zinc-900`}
+                  >
+                    <div
+                      className={`${bgColor} ${textColor} p-3 flex justify-between items-center cursor-pointer`}
+                      onClick={() => toggleAddressVisibility(chain)}
+                    >
+                      <div className="flex items-center">
+                        {icon}
+                        <span className="font-medium">
+                          {chain === "BTC"
+                            ? "Bitcoin"
+                            : chain === "ETH"
+                            ? "Ethereum"
+                            : "Solana"}
+                        </span>
+                        <span className="ml-2 text-xs bg-zinc-900/40 rounded-full px-2 py-0.5">
+                          {addresses.length}{" "}
+                          {addresses.length === 1 ? "address" : "addresses"}
+                        </span>
+                      </div>
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          addressesByChain[chain] ? "rotate-180" : ""
+                        }`}
+                      />
+                    </div>
+
+                    {addressesByChain[chain] && (
+                      <div className="divide-y divide-zinc-800">
+                        {addresses.map((address) => (
+                          <div
+                            key={address.id}
+                            className="p-3 hover:bg-zinc-800"
+                          >
+                            <div className="flex justify-between items-center">
+                              <div className="font-mono text-sm break-all pr-4 text-gray-300">
+                                {address.address}
+                              </div>
+                              <div className="flex items-center space-x-2 flex-shrink-0">
+                                <button
+                                  onClick={() =>
+                                    copyToClipboard(address.address)
+                                  }
+                                  className="p-1.5 text-gray-500 hover:text-gray-300 hover:bg-zinc-700 rounded"
+                                  title="Copy to clipboard"
+                                >
+                                  <Copy className="h-4 w-4" />
+                                </button>
+                                {isOwner && (
+                                  <button
+                                    onClick={() =>
+                                      handleRemoveClick(
+                                        address.id,
+                                        address.address,
+                                        address.chain as "BTC" | "ETH" | "SOL"
+                                      )
+                                    }
+                                    className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded"
+                                    title="Remove address"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-8 text-center">
+                <div className="h-16 w-16 mx-auto bg-zinc-800 rounded-full flex items-center justify-center mb-4">
+                  <Globe className="h-8 w-8 text-gray-600" />
                 </div>
+                <h3 className="text-lg font-medium text-white mb-2">
+                  No addresses linked
+                </h3>
+                <p className="text-gray-400 mb-6 max-w-md mx-auto">
+                  This domain doesn't have any blockchain addresses linked to it
+                  yet.
+                  {isOwner
+                    ? " Add your first address to start using this domain across chains."
+                    : ""}
+                </p>
+                {isOwner && (
+                  <button
+                    onClick={toggleAddAddressForm}
+                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 inline-flex items-center shadow-lg shadow-emerald-900/30"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Your First Address
+                  </button>
+                )}
               </div>
+            )}
+          </div>
+        </div>
 
-              {formState === "signing" && (
-                <div className="p-3 mb-4 bg-blue-50 border border-blue-200 rounded">
-                  <p className="flex items-center text-blue-700">
-                    <svg
-                      className="animate-spin h-5 w-5 mr-3 text-blue-500"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                    Waiting for signature... Please check your wallet and
-                    approve the request
-                  </p>
-                </div>
-              )}
-
-              {formState === "processing" && (
-                <div className="p-3 mb-4 bg-blue-50 border border-blue-200 rounded">
-                  <p className="flex items-center text-blue-700">
-                    <svg
-                      className="animate-spin h-5 w-5 mr-3 text-blue-500"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                    Processing your request...
-                  </p>
-                </div>
-              )}
-
-              <div className="flex justify-end space-x-3">
-                <button
-                  className="px-3 py-1 border rounded hover:bg-gray-50"
-                  onClick={cancelRemoveAddress}
-                  disabled={
-                    formState === "signing" || formState === "processing"
-                  }
-                >
-                  Cancel
-                </button>
-                <button
-                  className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-                  onClick={confirmRemoveAddress}
-                  disabled={
-                    formState === "signing" || formState === "processing"
-                  }
-                >
-                  {formState === "signing"
-                    ? "Waiting for signature..."
-                    : formState === "processing"
-                    ? "Processing..."
-                    : "Remove Address"}
-                </button>
+        {/* Add Address Form */}
+        {isOwner && addAddressVisible && (
+          <div className="mb-8 animate-fadeIn">
+            <div className="border border-emerald-900/30 rounded-lg overflow-hidden">
+              <div className="bg-emerald-900/20 p-3 border-b border-emerald-900/30">
+                <h3 className="font-medium text-emerald-400 flex items-center">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add New Blockchain Address
+                </h3>
+              </div>
+              <div className="p-4 bg-zinc-900">
+                <AddressForm
+                  domainId={domain.id}
+                  domainName={domain.name}
+                  onAddressAdded={() => {
+                    refetch();
+                    setAddAddressVisible(false);
+                  }}
+                />
               </div>
             </div>
           </div>
         )}
 
-        {isOwner && (
-          <section className="mb-8">
-            <h2 className="text-xl font-semibold mb-4">Add New Address</h2>
-            <div className="p-6 border rounded-lg">
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label
-                    htmlFor="chain"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    Blockchain
-                  </label>
-                  <select
-                    id="chain"
-                    name="chain"
-                    value={formData.chain}
-                    onChange={handleChange}
-                    disabled={formState !== "input"}
-                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="BTC">Bitcoin (BTC)</option>
-                    <option value="ETH">Ethereum (ETH)</option>
-                    <option value="SOL">Solana (SOL)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="address"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    Address
-                  </label>
-                  <input
-                    type="text"
-                    id="address"
-                    name="address"
-                    value={formData.address}
-                    onChange={handleChange}
-                    disabled={formState !== "input"}
-                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder={`Enter ${formData.chain} address`}
-                    required
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    {formData.chain === "BTC"
-                      ? "Example: bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq"
-                      : formData.chain === "ETH"
-                      ? "Example: 0x71C7656EC7ab88b098defB751B7401B5f6d8976F"
-                      : "Example: 5U1Vhm6ejkqahzFbPCrCwvVzrTWkXWABdyEyUvGJDLfL"}
-                  </p>
-                </div>
-
-                {formState === "signing" && !isRemovingAddress && (
-                  <div className="p-4 bg-blue-50 border border-blue-200 rounded">
-                    <p className="flex items-center text-blue-700">
-                      <svg
-                        className="animate-spin h-5 w-5 mr-3 text-blue-500"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        ></circle>
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        ></path>
-                      </svg>
-                      Waiting for signature... Please check your wallet and
-                      approve the request
-                    </p>
-                    <p className="mt-2 text-xs text-blue-600">
-                      If you don't see a wallet popup, check if it was blocked
-                      by your browser or if your wallet extension is running
-                    </p>
-                  </div>
-                )}
-
-                {formState === "processing" && !isRemovingAddress && (
-                  <div className="p-4 bg-blue-50 border border-blue-200 rounded">
-                    <p className="flex items-center text-blue-700">
-                      <svg
-                        className="animate-spin h-5 w-5 mr-3 text-blue-500"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        ></circle>
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        ></path>
-                      </svg>
-                      Processing your request...
-                    </p>
-                  </div>
-                )}
-
-                <div className="flex justify-end">
-                  <button
-                    type="submit"
-                    disabled={formState !== "input"}
-                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors disabled:bg-blue-300"
-                  >
-                    Add Address
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            {/* Information Box */}
-            <div className="mt-6 p-4 bg-blue-50 border border-blue-100 rounded-lg">
-              <h3 className="text-md font-semibold text-blue-800 mb-2">
-                Address Verification with Signatures
+        {/* Information Box */}
+        <div className="mt-8 bg-emerald-900/20 border border-emerald-900/30 rounded-lg p-4">
+          <div className="flex items-start">
+            <Shield className="h-5 w-5 text-emerald-400 mr-3 mt-0.5 flex-shrink-0" />
+            <div>
+              <h3 className="text-md font-semibold text-white mb-2">
+                Cross-Chain Verification
               </h3>
-              <p className="text-sm text-blue-600">
-                When adding or removing an address for your domain, you'll be
-                asked to sign a message with your Stacks wallet. This signature
-                proves you authorize the action and helps prevent unauthorized
-                changes.
+              <p className="text-sm text-gray-300 mb-2">
+                When adding blockchain addresses, you'll need to verify
+                ownership:
               </p>
+              <ul className="text-sm text-gray-300 space-y-1 list-disc pl-5">
+                <li>
+                  <strong className="text-emerald-400">Bitcoin (BTC):</strong>{" "}
+                  Uses your connected Stacks/Leather wallet for verification
+                </li>
+                <li>
+                  <strong className="text-emerald-400">Ethereum (ETH):</strong>{" "}
+                  Requires connecting MetaMask or other Ethereum-compatible
+                  wallet
+                </li>
+                <li>
+                  <strong className="text-emerald-400">Solana (SOL):</strong>{" "}
+                  Requires connecting Phantom or other Solana-compatible wallet
+                </li>
+              </ul>
             </div>
-          </section>
+          </div>
+        </div>
+
+        {/* Address Removal Modal */}
+        {isRemovingAddress && addressToRemove && (
+          <RemoveAddressModal
+            addressId={addressToRemove.id}
+            address={addressToRemove.address}
+            chain={addressToRemove.chain}
+            domainName={domain.name}
+            onSuccess={handleRemoveSuccess}
+            onCancel={handleRemoveCancel}
+          />
         )}
+
+        {/* Quick navigation */}
+        <div className="mt-8 pt-4 border-t border-zinc-800">
+          <Link
+            href="/"
+            className="text-emerald-400 hover:text-emerald-300 inline-flex items-center text-sm"
+          >
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            Back to Dashboard
+          </Link>
+        </div>
       </Layout>
     </ErrorBoundary>
   );

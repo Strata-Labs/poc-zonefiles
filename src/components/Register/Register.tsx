@@ -5,8 +5,16 @@ import { useRouter } from "next/router";
 import Link from "next/link";
 import { useStacksAuthContext } from "@/contexts/StacksAuthContext";
 import { trpc } from "../../../utils/trpc";
-import WalletConnector from "../WalletConnect/WalletConnector";
 import DomainOwnershipChecker from "../Ownership/DomainOwnershipChecker";
+import Layout from "@/components/Layout";
+import {
+  Globe,
+  ArrowLeft,
+  CheckCircle,
+  AlertCircle,
+  Loader,
+  InfoIcon,
+} from "lucide-react";
 
 export default function RegisterDomain() {
   const router = useRouter();
@@ -98,46 +106,73 @@ export default function RegisterDomain() {
   };
 
   return (
-    <div
-      className={` min-h-screen flex flex-col items-center p-8 font-[family-name:var(--font-geist-sans)]`}
+    <Layout
+      title="Register New Domain"
+      description="Register a domain in the cross-chain registry"
     >
-      <header className="w-full max-w-4xl mb-12">
-        <h1 className="text-3xl font-bold mb-2">Register New Domain</h1>
-        <p className="text-gray-600">
-          Register a new cross-chain domain with your Stacks wallet
-        </p>
-      </header>
+      {!authenticated ? (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6">
+          <div className="flex items-center mb-6 bg-zinc-800/50 p-4 rounded-lg">
+            <AlertCircle className="h-6 w-6 text-amber-500 mr-3 flex-shrink-0" />
+            <div>
+              <h3 className="font-medium text-white mb-1">
+                Authentication Required
+              </h3>
+              <p className="text-gray-400">
+                You need to connect your Stacks wallet to register a domain.
+                Please use the "Connect Wallet" button in the navigation bar.
+              </p>
+            </div>
+          </div>
 
-      <main className="w-full max-w-4xl flex-grow">
-        {!authenticated ? (
-          <section className="mb-12">
-            <h2 className="text-xl font-semibold mb-4">Connect Your Wallet</h2>
-            <WalletConnector />
-          </section>
-        ) : (
-          <section className="mb-12">
-            <h2 className="text-xl font-semibold mb-4">Register Domain</h2>
-            <div className="p-6 border rounded-lg">
-              <form onSubmit={handleRegister} className="space-y-4">
+          <div className="flex justify-center">
+            <Link
+              href="/"
+              className="px-4 py-2 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors flex items-center"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              <span>Return to Dashboard</span>
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden shadow-lg">
+            <div className="bg-gradient-to-r from-emerald-900/30 to-zinc-900 p-4 border-b border-zinc-800">
+              <div className="flex items-center">
+                <div className="h-10 w-10 bg-emerald-900/50 rounded-full flex items-center justify-center mr-3">
+                  <Globe className="h-5 w-5 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">
+                    Register Domain
+                  </h3>
+                  <p className="text-sm text-gray-400">
+                    Add a new domain to the cross-chain registry
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <form onSubmit={handleRegister} className="space-y-5">
                 <div>
                   <label
                     htmlFor="domainName"
-                    className="block text-sm font-medium text-gray-700 mb-1"
+                    className="block text-sm font-medium text-gray-300 mb-1"
                   >
                     Domain Name
                   </label>
-                  <div className="flex">
-                    <input
-                      type="text"
-                      id="domainName"
-                      value={domainName}
-                      onChange={(e) => setDomainName(e.target.value)}
-                      className="flex-grow px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="yourdomain.tld"
-                      required
-                      disabled={isVerifying}
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    id="domainName"
+                    value={domainName}
+                    onChange={(e) => setDomainName(e.target.value)}
+                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-white"
+                    placeholder="yourdomain.btc"
+                    required
+                    disabled={isVerifying}
+                  />
                   <p className="mt-1 text-sm text-gray-500">
                     You must own this domain in the BNS system before
                     registering here
@@ -155,87 +190,87 @@ export default function RegisterDomain() {
                 {/* Verification Status */}
                 {verificationStatus.status !== "idle" && (
                   <div
-                    className={`p-3 rounded ${
+                    className={`p-4 rounded-lg ${
                       verificationStatus.status === "verifying"
-                        ? "bg-blue-50 border border-blue-200 text-blue-600"
+                        ? "bg-blue-900/20 border border-blue-900/30 text-blue-300"
                         : verificationStatus.status === "success"
-                        ? "bg-green-50 border border-green-200 text-green-600"
-                        : "bg-red-50 border border-red-200 text-red-600"
+                        ? "bg-emerald-900/20 border border-emerald-900/30 text-emerald-300"
+                        : "bg-red-900/20 border border-red-900/30 text-red-300"
                     }`}
                   >
                     {verificationStatus.status === "verifying" && (
                       <div className="flex items-center">
-                        <svg
-                          className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-500"
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          ></circle>
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          ></path>
-                        </svg>
-                        {verificationStatus.message}
+                        <Loader className="animate-spin h-5 w-5 text-blue-400 mr-3" />
+                        <span>{verificationStatus.message}</span>
                       </div>
                     )}
-                    {verificationStatus.status !== "verifying" &&
-                      verificationStatus.message}
+                    {verificationStatus.status === "success" && (
+                      <div className="flex items-center">
+                        <CheckCircle className="h-5 w-5 text-emerald-400 mr-3" />
+                        <span>{verificationStatus.message}</span>
+                      </div>
+                    )}
+                    {verificationStatus.status === "error" && (
+                      <div className="flex items-center">
+                        <AlertCircle className="h-5 w-5 text-red-400 mr-3" />
+                        <span>{verificationStatus.message}</span>
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {error && verificationStatus.status === "idle" && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded text-red-600">
-                    {error}
+                  <div className="p-4 bg-red-900/20 border border-red-900/30 rounded-lg text-red-300 flex items-center">
+                    <AlertCircle className="h-5 w-5 mr-3 flex-shrink-0" />
+                    <span>{error}</span>
                   </div>
                 )}
 
                 <div className="flex justify-end space-x-3 pt-4">
                   <Link
                     href="/"
-                    className="px-4 py-2 border rounded hover:bg-gray-50 transition-colors"
+                    className="px-4 py-2 bg-zinc-800 text-white border border-zinc-700 rounded-lg hover:bg-zinc-700 transition-colors"
                   >
                     Cancel
                   </Link>
                   <button
                     type="submit"
                     disabled={!domainName || isVerifying}
-                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors disabled:bg-blue-300"
+                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:bg-emerald-900/40 disabled:text-emerald-100/50 shadow-lg shadow-emerald-900/30"
                   >
-                    {isVerifying ? "Verifying..." : "Register Domain"}
+                    {isVerifying ? (
+                      <span className="flex items-center">
+                        <Loader className="animate-spin h-4 w-4 mr-2" />
+                        Verifying...
+                      </span>
+                    ) : (
+                      "Register Domain"
+                    )}
                   </button>
                 </div>
               </form>
             </div>
+          </div>
 
-            {/* Information Box */}
-            <div className="mt-6 p-4 bg-blue-50 border border-blue-100 rounded-lg">
-              <h3 className="text-md font-semibold text-blue-800 mb-2">
-                How Domain Verification Works
-              </h3>
-              <p className="text-sm text-blue-600">
-                When you register a domain, we verify that you own it by
-                checking against the BNS (Bitcoin Name System) records. The
-                domain must be already registered to your Stacks address in the
-                BNS system for verification to succeed.
-              </p>
+          {/* Information Box */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5">
+            <div className="flex items-start">
+              <InfoIcon className="h-5 w-5 text-emerald-400 mt-0.5 mr-3 flex-shrink-0" />
+              <div>
+                <h3 className="text-md font-semibold text-white mb-2">
+                  How Domain Verification Works
+                </h3>
+                <p className="text-gray-400 text-sm leading-relaxed">
+                  When you register a domain, we verify that you own it by
+                  checking against the BNS (Bitcoin Name System) records. The
+                  domain must be already registered to your Stacks address in
+                  the BNS system for verification to succeed.
+                </p>
+              </div>
             </div>
-          </section>
-        )}
-      </main>
-
-      <footer className="w-full max-w-4xl py-8 text-center text-gray-500 text-sm">
-        Cross-Chain Domain System &copy; {new Date().getFullYear()}
-      </footer>
-    </div>
+          </div>
+        </div>
+      )}
+    </Layout>
   );
 }

@@ -11,6 +11,28 @@ const config: Config = {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
+        primary: {
+          DEFAULT: "var(--primary)",
+          dark: "var(--primary-dark)",
+          light: "var(--primary-light)",
+        },
+        surface: {
+          DEFAULT: "var(--surface)",
+          hover: "var(--surface-hover)",
+        },
+        text: {
+          primary: "var(--text-primary)",
+          secondary: "var(--text-secondary)",
+        },
+      },
+      animation: {
+        fadeIn: "fadeIn 0.3s ease-out forwards",
+      },
+      keyframes: {
+        fadeIn: {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" },
+        },
       },
     },
   },

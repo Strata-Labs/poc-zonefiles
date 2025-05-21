@@ -1,9 +1,13 @@
-// server/routers/domain.ts
+// server/routers/domain.ts (updated)
 
 import { z } from "zod";
 import { router, publicProcedure } from "../trpc";
 import { verifyDomainOwnership } from "../../utils/domainUtils";
 import { verifySignature } from "../../utils/signatureUtils";
+import {
+  verifyEthereumSignature,
+  verifySolanaSignature,
+} from "../../utils/wallets";
 import { Prisma } from "@prisma/client";
 
 // Define Chain enum to match Prisma schema
@@ -123,11 +127,19 @@ export const domainRouter = router({
         chain: ChainEnum,
         signature: z.string(),
         publicKey: z.string(),
+        verificationMethod: z.enum(["stacks", "native"]).default("stacks"),
       })
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        const { domainId, address, chain, signature, publicKey } = input;
+        const {
+          domainId,
+          address,
+          chain,
+          signature,
+          publicKey,
+          verificationMethod,
+        } = input;
 
         console.log("AddAddress mutation input:", {
           domainId,
@@ -135,6 +147,7 @@ export const domainRouter = router({
           chain,
           signatureLength: signature.length,
           publicKey,
+          verificationMethod,
         });
 
         // Check if the domain exists
@@ -151,13 +164,39 @@ export const domainRouter = router({
           ownerAddress: domain.ownerStacksAddress,
         });
 
-        // Generate the message that should have been signed
-        const message = `I authorize adding ${chain} address ${address} to domain ${domain.name}`;
+        // Verify the signature based on verification method
+        let isSignatureValid = false;
 
-        console.log("Message to verify:", message);
+        if (verificationMethod === "stacks") {
+          // Legacy Stacks verification
+          const message = `I authorize adding ${chain} address ${address} to domain ${domain.name}`;
+          isSignatureValid = verifySignature(message, signature, publicKey);
+        } else if (verificationMethod === "native") {
+          // Native verification based on chain
+          const message = `I am the owner of this ${chain} address: ${address} and I authorize its addition to domain ${domain.name}`;
 
-        // Verify the signature
-        const isSignatureValid = verifySignature(message, signature, publicKey);
+          if (chain === "ETH") {
+            isSignatureValid = verifyEthereumSignature(
+              message,
+              signature,
+              address
+            );
+          } else if (chain === "SOL") {
+            isSignatureValid = verifySolanaSignature(
+              message,
+              signature,
+              address
+            );
+          } else {
+            // For BTC, we'll still use Stacks verification
+            const stacksMessage = `I authorize adding ${chain} address ${address} to domain ${domain.name}`;
+            isSignatureValid = verifySignature(
+              stacksMessage,
+              signature,
+              publicKey
+            );
+          }
+        }
 
         console.log("Signature validation result:", isSignatureValid);
 
@@ -216,16 +255,18 @@ export const domainRouter = router({
         addressId: z.string(),
         signature: z.string(),
         publicKey: z.string(),
+        verificationMethod: z.enum(["stacks", "native"]).default("stacks"),
       })
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        const { addressId, signature, publicKey } = input;
+        const { addressId, signature, publicKey, verificationMethod } = input;
 
         console.log("RemoveAddress mutation input:", {
           addressId,
           signatureLength: signature.length,
           publicKey,
+          verificationMethod,
         });
 
         // Find the address and include domain information
@@ -250,13 +291,39 @@ export const domainRouter = router({
           ownerAddress: domain.ownerStacksAddress,
         });
 
-        // Generate the message that should have been signed
-        const message = `I authorize removing ${address.chain} address ${address.address} from domain ${domain.name}`;
+        // Verify the signature based on verification method
+        let isSignatureValid = false;
 
-        console.log("Message to verify:", message);
+        if (verificationMethod === "stacks") {
+          // Legacy Stacks verification
+          const message = `I authorize removing ${address.chain} address ${address.address} from domain ${domain.name}`;
+          isSignatureValid = verifySignature(message, signature, publicKey);
+        } else if (verificationMethod === "native") {
+          // Native verification based on chain
+          const message = `I am the owner of this ${address.chain} address: ${address.address} and I authorize its removal from domain ${domain.name}`;
 
-        // Verify the signature
-        const isSignatureValid = verifySignature(message, signature, publicKey);
+          if (address.chain === "ETH") {
+            isSignatureValid = verifyEthereumSignature(
+              message,
+              signature,
+              address.address
+            );
+          } else if (address.chain === "SOL") {
+            isSignatureValid = verifySolanaSignature(
+              message,
+              signature,
+              address.address
+            );
+          } else {
+            // For BTC, we'll still use Stacks verification
+            const stacksMessage = `I authorize removing ${address.chain} address ${address.address} from domain ${domain.name}`;
+            isSignatureValid = verifySignature(
+              stacksMessage,
+              signature,
+              publicKey
+            );
+          }
+        }
 
         console.log("Signature validation result:", isSignatureValid);
 

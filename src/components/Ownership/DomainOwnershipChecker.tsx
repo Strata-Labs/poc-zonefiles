@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useStacksAuthContext } from "@/contexts/StacksAuthContext";
+import { CheckCircle, AlertCircle, Loader } from "lucide-react";
 
 type OwnershipStatus = {
   status: "idle" | "checking" | "verified" | "error";
@@ -117,59 +118,58 @@ export default function DomainOwnershipChecker({
         type="button"
         onClick={checkOwnership}
         disabled={status.status === "checking" || !authenticated || !domainName}
-        className="text-sm px-3 py-1 bg-gray-100 border rounded hover:bg-gray-200 transition-colors disabled:bg-gray-50 disabled:text-gray-400"
+        className="text-sm px-3 py-2 bg-zinc-800 text-white border border-zinc-700 rounded-lg hover:bg-zinc-700 transition-colors disabled:bg-zinc-900 disabled:text-gray-500 disabled:border-zinc-800 flex items-center"
       >
-        Check Domain Ownership
+        {status.status === "checking" ? (
+          <>
+            <Loader className="h-3.5 w-3.5 mr-2 animate-spin" />
+            Checking...
+          </>
+        ) : (
+          "Check Domain Ownership"
+        )}
       </button>
 
       {status.status !== "idle" && (
         <div
-          className={`mt-2 p-3 rounded text-sm ${
+          className={`mt-3 p-4 rounded-lg text-sm ${
             status.status === "checking"
-              ? "bg-blue-50 border border-blue-200 text-blue-600"
+              ? "bg-blue-900/20 border border-blue-900/30 text-blue-300"
               : status.status === "verified"
-              ? "bg-green-50 border border-green-200 text-green-600"
-              : "bg-red-50 border border-red-200 text-red-600"
+              ? "bg-emerald-900/20 border border-emerald-900/30 text-emerald-300"
+              : "bg-red-900/20 border border-red-900/30 text-red-300"
           }`}
         >
           {status.status === "checking" && (
             <div className="flex items-center">
-              <svg
-                className="animate-spin -ml-1 mr-3 h-4 w-4 text-blue-500"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                ></circle>
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
-              </svg>
+              <Loader className="animate-spin h-4 w-4 mr-3 text-blue-400" />
               {status.message}
             </div>
           )}
-          {status.status !== "checking" && (
-            <>
-              <p>{status.message}</p>
-              {status.details?.ownerAddress &&
-                status.details.ownerAddress !== senderAddresses.mainnet && (
-                  <p className="mt-1">
-                    Current owner:{" "}
-                    <span className="font-mono text-xs">
-                      {status.details.ownerAddress}
-                    </span>
-                  </p>
-                )}
-            </>
+          {status.status === "verified" && (
+            <div className="flex items-start">
+              <CheckCircle className="h-4 w-4 text-emerald-400 mt-0.5 mr-2 flex-shrink-0" />
+              <div>
+                <p>{status.message}</p>
+              </div>
+            </div>
+          )}
+          {status.status === "error" && (
+            <div className="flex items-start">
+              <AlertCircle className="h-4 w-4 text-red-400 mt-0.5 mr-2 flex-shrink-0" />
+              <div>
+                <p>{status.message}</p>
+                {status.details?.ownerAddress &&
+                  status.details.ownerAddress !== senderAddresses.mainnet && (
+                    <p className="mt-1">
+                      Current owner:{" "}
+                      <span className="font-mono text-xs text-gray-400">
+                        {status.details.ownerAddress}
+                      </span>
+                    </p>
+                  )}
+              </div>
+            </div>
           )}
         </div>
       )}
